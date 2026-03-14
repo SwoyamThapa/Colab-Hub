@@ -1,5 +1,8 @@
-import { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useContext, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { AuthContext } from '../context/AuthContext.jsx'
+
+const API_BASE = 'http://localhost:5005'
 
 export default function Login() {
   const [email, setEmail] = useState('')
@@ -7,6 +10,7 @@ export default function Login() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
+  const { login } = useContext(AuthContext)
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -14,74 +18,69 @@ export default function Login() {
     setLoading(true)
 
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await fetch(`${API_BASE}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       })
 
-      const data = await res.json()
+      let data = null
+      try {
+        data = await res.json()
+      } catch {
+        // ignore non-json responses
+      }
 
       if (!res.ok) {
-        setError(data.message || 'Login failed')
-        setLoading(false)
+        setError(data?.message || 'Login failed')
         return
       }
 
-      // Store the JWT token in local storage for session persistence
-      if (data.token) {
-        localStorage.setItem('token', data.token)
+      const token = data?.token
+      if (!token) {
+        setError('No token received from server')
+        return
       }
-      
-      // Redirect to the home page (Discovery Feed)
-      navigate('/', { replace: true })
+
+      login(token)
+      navigate('/feed', { replace: true })
     } catch (err) {
-      setError(err.message || 'Something went wrong')
+      setError(err?.message || 'Something went wrong')
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      {/* Simple Header */}
-      <header className="border-b border-slate-200 bg-white shadow-sm">
-        <div className="mx-auto max-w-6xl px-4 py-4 sm:px-6 lg:px-8 flex items-center justify-between">
-          <Link to="/" className="text-2xl font-bold tracking-tight text-indigo-600 hover:text-indigo-700">
-            Colab Hub
-          </Link>
+    <div className="min-h-screen bg-slate-50 px-4 py-10 text-slate-900 flex items-center justify-center">
+      <div className="w-full max-w-md">
+        <div className="mb-6 flex items-center justify-between">
           <Link
             to="/"
-            className="text-sm font-medium text-slate-600 hover:text-slate-900"
+            className="text-lg font-bold tracking-tight text-indigo-600 hover:text-indigo-700"
           >
-            ← Back to Feed
+            Colab Hub
+          </Link>
+          <Link to="/register" className="text-sm font-medium text-slate-600 hover:text-slate-900">
+            Sign Up
           </Link>
         </div>
-      </header>
 
-      <main className="mx-auto max-w-md px-4 py-12 sm:px-6 lg:px-8">
         <section className="rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
-          <h2 className="text-xl font-semibold text-slate-800">Sign In</h2>
+          <h2 className="text-xl font-semibold text-slate-800">Login</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Enter your credentials to access your account.
+            Sign in to access your discovery feed.
           </p>
 
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-            {/* Error Message Display */}
             {error && (
-              <div
-                role="alert"
-                className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
-              >
+              <p className="text-sm font-medium text-red-600" role="alert">
                 {error}
-              </div>
+              </p>
             )}
 
             <div>
-              <label
-                htmlFor="email"
-                className="block text-sm font-medium text-slate-700"
-              >
+              <label htmlFor="email" className="block text-sm font-medium text-slate-700">
                 Email
               </label>
               <input
@@ -90,16 +89,14 @@ export default function Login() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                autoComplete="email"
                 className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                 placeholder="you@example.com"
               />
             </div>
 
             <div>
-              <label
-                htmlFor="password"
-                className="block text-sm font-medium text-slate-700"
-              >
+              <label htmlFor="password" className="block text-sm font-medium text-slate-700">
                 Password
               </label>
               <input
@@ -108,6 +105,7 @@ export default function Login() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                autoComplete="current-password"
                 className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                 placeholder="••••••••"
               />
@@ -118,21 +116,21 @@ export default function Login() {
               disabled={loading}
               className="w-full rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50"
             >
-              {loading ? 'Signing in…' : 'Sign In'}
+              {loading ? 'Processing...' : 'Sign In'}
             </button>
-          </form>
 
-          {/* Registration Link */}
-          <div className="mt-6 text-center border-t border-slate-100 pt-6">
-            <p className="text-sm text-slate-600">
+            <p className="pt-2 text-center text-sm text-slate-600">
               Don't have an account?{' '}
-              <Link to="/register" className="font-medium text-indigo-600 hover:text-indigo-500">
-                Sign up here
+              <Link
+                to="/register"
+                className="font-medium text-indigo-600 hover:text-indigo-500"
+              >
+                Sign up
               </Link>
             </p>
-          </div>
+          </form>
         </section>
-      </main>
+      </div>
     </div>
   )
 }

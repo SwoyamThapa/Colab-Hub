@@ -4,6 +4,7 @@ import cors from 'cors';
 import { connectDB } from './config/db.js';
 import projectRoutes from './routes/projectRoutes.js';
 import authRoutes from './routes/authRoutes.js';
+import requestRoutes from './routes/requestRoutes.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -15,6 +16,7 @@ app.use(express.json());
 // Routes
 app.use('/api/projects', projectRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/requests', requestRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -26,7 +28,13 @@ app.get('/api', (req, res) => {
   res.json({
     name: 'Colab Hub API',
     version: '1.0.0',
-    endpoints: ['/api/health', '/api/projects', '/api/auth/login'],
+    endpoints: [
+      '/api/health',
+      '/api/projects',
+      '/api/auth/login',
+      '/api/auth/register',
+      '/api/requests',
+    ],
   });
 });
 
