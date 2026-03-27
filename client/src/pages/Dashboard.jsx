@@ -12,6 +12,11 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
+  const authHeaders = () => {
+    const token = localStorage.getItem('token')
+    return token ? { Authorization: `Bearer ${token}` } : {}
+  }
+
   useEffect(() => {
     if (!user) {
       navigate('/login', { replace: true })
@@ -70,6 +75,86 @@ export default function Dashboard() {
     return null
   }
 
+  const handleDeleteRequest = async (idToDelete) => {
+    if (!idToDelete) return
+
+    const ok = window.confirm('Delete this project request? This cannot be undone.')
+    if (!ok) return
+
+    try {
+      const token = localStorage.getItem('token')
+      if (!token) {
+        navigate('/login', { replace: true })
+        return
+      }
+
+      setError(null)
+      const res = await fetch(`${API_BASE}/api/requests/${idToDelete}`, {
+        method: 'DELETE',
+        headers: {
+          ...authHeaders(),
+        },
+      })
+
+      if (res.status === 401) {
+        navigate('/login', { replace: true })
+        return
+      }
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null)
+        setError(data?.message || 'Failed to delete request')
+        return
+      }
+
+      setRequests((prev) =>
+        prev.filter((r) => String(r?._id) !== String(idToDelete))
+      )
+    } catch (err) {
+      setError(err?.message || 'Something went wrong')
+    }
+  }
+
+  const handleCompleteRequest = async (idToComplete) => {
+    if (!idToComplete) return
+
+    try {
+      const token = localStorage.getItem('token')
+      if (!token) {
+        navigate('/login', { replace: true })
+        return
+      }
+
+      setError(null)
+      const res = await fetch(`${API_BASE}/api/requests/${idToComplete}/status`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders(),
+        },
+        body: JSON.stringify({ status: 'completed' }),
+      })
+
+      if (res.status === 401) {
+        navigate('/login', { replace: true })
+        return
+      }
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null)
+        setError(data?.message || 'Failed to mark completed')
+        return
+      }
+
+      const updated = await res.json()
+      setRequests((prev) =>
+        prev.map((r) => (String(r?._id) === String(idToComplete) ? updated : r))
+      )
+    } catch (err) {
+      setError(err?.message || 'Something went wrong')
+    }
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 px-4 py-10 text-slate-900">
       <div className="mx-auto max-w-6xl">
@@ -113,7 +198,9 @@ export default function Dashboard() {
                   {myRequests.map((r) => (
                     <div
                       key={r._id}
-                      className="rounded-lg border border-slate-200 bg-slate-50 p-4"
+                      className={`rounded-lg border border-slate-200 p-4 ${
+                        r.status === 'completed' ? 'bg-slate-100' : 'bg-slate-50'
+                      }`}
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div>
@@ -124,8 +211,14 @@ export default function Dashboard() {
                             Category: <span className="font-medium">{r.category}</span>
                           </p>
                         </div>
-                        <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-[11px] font-medium text-slate-700">
-                          {r.status}
+                        <span
+                          className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-medium ${
+                            r.status === 'completed'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-slate-100 text-slate-700'
+                          }`}
+                        >
+                          {r.status === 'completed' ? 'Completed' : r.status}
                         </span>
                       </div>
 
@@ -141,17 +234,21 @@ export default function Dashboard() {
                         >
                           Enter Workspace
                         </button>
+                        {r.status !== 'completed' && (
+                          <button
+                            type="button"
+                            onClick={() => handleCompleteRequest(r._id)}
+                            className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:opacity-50"
+                          >
+                            Complete Project
+                          </button>
+                        )}
                         <button
                           type="button"
-                          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                          onClick={() => handleDeleteRequest(r._id)}
+                          className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-2"
                         >
-                          Edit (TODO)
-                        </button>
-                        <button
-                          type="button"
-                          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-rose-700 hover:bg-slate-50"
-                        >
-                          Delete (TODO)
+                          Delete
                         </button>
                       </div>
                     </div>

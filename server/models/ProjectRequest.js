@@ -60,6 +60,25 @@ const projectRequestSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
     },
+    availableCustomRoles: {
+      type: [String],
+      default: [],
+    },
+    authorProjectRole: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    helperProjectRole: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    helperControlRole: {
+      type: String,
+      enum: ['Collaborator', 'Co-Lead'],
+      default: 'Collaborator',
+    },
     status: {
       type: String,
       enum: ['pending', 'accepted', 'completed'],
@@ -72,6 +91,10 @@ const projectRequestSchema = new mongoose.Schema(
     resources: {
       type: [resourceSchema],
       default: [],
+    },
+    scratchpad: {
+      type: String,
+      default: '',
     },
   },
   { timestamps: true }

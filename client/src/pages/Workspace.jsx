@@ -1,4 +1,4 @@
-import { useContext, useEffect, useState } from 'react'
+import { useContext, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { AuthContext } from '../context/AuthContext.jsx'
 
@@ -41,10 +41,15 @@ export default function Workspace() {
   const [taskTitle, setTaskTitle] = useState('')
   const [addingTask, setAddingTask] = useState(false)
   const [togglingTaskId, setTogglingTaskId] = useState(null)
-  const [resourceTitle, setResourceTitle] = useState('')
-  const [resourceUrl, setResourceUrl] = useState('')
+  const [assigningTaskId, setAssigningTaskId] = useState(null)
+  const [newResourceTitle, setNewResourceTitle] = useState('')
+  const [newResourceUrl, setNewResourceUrl] = useState('')
   const [addingResource, setAddingResource] = useState(false)
   const [deletingResourceId, setDeletingResourceId] = useState(null)
+  const [newCustomRole, setNewCustomRole] = useState('')
+  const [creatingCustomRole, setCreatingCustomRole] = useState(false)
+  const [scratchpadText, setScratchpadText] = useState('')
+  const [isSavingNotes, setIsSavingNotes] = useState(false)
 
   useEffect(() => {
     if (!user) {
@@ -112,6 +117,12 @@ export default function Workspace() {
     }
   }, [user, id, navigate])
 
+  useEffect(() => {
+    if (request && request.scratchpad !== undefined) {
+      setScratchpadText(request.scratchpad)
+    }
+  }, [request])
+
   const handleAddTask = async (e) => {
     e.preventDefault()
     const trimmed = taskTitle.trim()
@@ -168,10 +179,37 @@ export default function Workspace() {
     }
   }
 
+  const handleAssignTask = async (taskId, assigneeId) => {
+    if (!id || !taskId) return
+
+    setAssigningTaskId(taskId)
+    try {
+      const res = await fetch(`/api/requests/${id}/tasks/${taskId}/assign`, {
+        method: 'PUT',
+        headers: authHeadersJson(),
+        body: JSON.stringify({ assigneeId: assigneeId || '' }),
+      })
+
+      if (res.status === 401) {
+        navigate('/login', { replace: true })
+        return
+      }
+
+      if (!res.ok) {
+        return
+      }
+
+      const data = await res.json()
+      setRequest(data)
+    } finally {
+      setAssigningTaskId(null)
+    }
+  }
+
   const handleAddResource = async (e) => {
     e.preventDefault()
-    const t = resourceTitle.trim()
-    const u = resourceUrl.trim()
+    const t = newResourceTitle.trim()
+    const u = newResourceUrl.trim()
     if (!t || !u || !id) return
 
     setAddingResource(true)
@@ -193,14 +231,14 @@ export default function Workspace() {
 
       const data = await res.json()
       setRequest(data)
-      setResourceTitle('')
-      setResourceUrl('')
+      setNewResourceTitle('')
+      setNewResourceUrl('')
     } finally {
       setAddingResource(false)
     }
   }
 
-  const handleDeleteResource = async (resourceId) => {
+  const handleRemoveResource = async (resourceId) => {
     if (!id || !resourceId) return
 
     setDeletingResourceId(resourceId)
@@ -226,6 +264,118 @@ export default function Workspace() {
     }
   }
 
+  const handleCreateCustomRole = async (e) => {
+    e.preventDefault()
+    const role = newCustomRole.trim()
+    if (!id || !role) return
+
+    setCreatingCustomRole(true)
+    try {
+      const res = await fetch(`/api/requests/${id}/customRoles`, {
+        method: 'POST',
+        headers: authHeadersJson(),
+        body: JSON.stringify({ role }),
+      })
+
+      if (res.status === 401) {
+        navigate('/login', { replace: true })
+        return
+      }
+
+      if (!res.ok) {
+        return
+      }
+
+      const data = await res.json()
+      setRequest(data)
+      setNewCustomRole('')
+    } finally {
+      setCreatingCustomRole(false)
+    }
+  }
+
+  const handleUpdateProjectRole = async (targetUser, role) => {
+    if (!id) return
+
+    try {
+      const res = await fetch(`/api/requests/${id}/projectRole`, {
+        method: 'PUT',
+        headers: authHeadersJson(),
+        body: JSON.stringify({ targetUser, role }),
+      })
+
+      if (res.status === 401) {
+        navigate('/login', { replace: true })
+        return
+      }
+
+      if (!res.ok) {
+        return
+      }
+
+      const data = await res.json()
+      setRequest(data)
+    } catch {
+      // ignore
+    }
+  }
+
+  const handleToggleControlRole = async () => {
+    if (!id || !request?.helper) return
+    const next =
+      request.helperControlRole === 'Co-Lead' ? 'Collaborator' : 'Co-Lead'
+
+    try {
+      const res = await fetch(`/api/requests/${id}/controlRole`, {
+        method: 'PUT',
+        headers: authHeadersJson(),
+        body: JSON.stringify({ role: next }),
+      })
+
+      if (res.status === 401) {
+        navigate('/login', { replace: true })
+        return
+      }
+
+      if (!res.ok) {
+        return
+      }
+
+      const data = await res.json()
+      setRequest(data)
+    } catch {
+      // ignore
+    }
+  }
+
+  const handleSaveNotes = async () => {
+    if (!id) return
+
+    setIsSavingNotes(true)
+    try {
+      const res = await fetch(`/api/requests/${id}/scratchpad`, {
+        method: 'PUT',
+        headers: authHeadersJson(),
+        body: JSON.stringify({ text: scratchpadText }),
+      })
+
+      if (res.status === 401) {
+        navigate('/login', { replace: true })
+        return
+      }
+
+      if (!res.ok) {
+        return
+      }
+
+      const data = await res.json()
+      setRequest(data)
+      // Keep local text; request.scratchpad is now synced.
+    } finally {
+      setIsSavingNotes(false)
+    }
+  }
+
   if (!user) {
     return null
   }
@@ -233,7 +383,20 @@ export default function Workspace() {
   const author = request?.author
   const helper = request?.helper
   const tasks = Array.isArray(request?.tasks) ? request.tasks : []
-  const resources = Array.isArray(request?.resources) ? request.resources : []
+  const resources = Array.isArray(request?.resources)
+    ? request.resources
+    : []
+
+  const isLead = Boolean(
+    request && user && idEquals(user.id, request.author?._id ?? request.author)
+  )
+  const isCoLead = Boolean(
+    request &&
+      user &&
+      idEquals(user.id, request.helper?._id ?? request.helper) &&
+      request.helperControlRole === 'Co-Lead'
+  )
+  const canManageRoles = isLead || isCoLead
 
   const hrefForResource = (url) => {
     const s = typeof url === 'string' ? url.trim() : ''
@@ -276,10 +439,35 @@ export default function Workspace() {
           <div className="grid gap-6 lg:grid-cols-2">
             <div className="flex flex-col gap-6">
               <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-                <h2 className="text-lg font-semibold text-slate-800">Team Members</h2>
-                <p className="mt-1 text-sm text-slate-600">
-                  People with access to this private workspace.
-                </p>
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <h2 className="text-lg font-semibold text-slate-800">Team Members</h2>
+                    <p className="mt-1 text-sm text-slate-600">
+                      People with access to this private workspace.
+                    </p>
+                  </div>
+
+                  <form
+                    onSubmit={handleCreateCustomRole}
+                    className="flex w-full max-w-sm flex-col gap-2 sm:w-auto"
+                  >
+                    <input
+                      type="text"
+                      value={newCustomRole}
+                      onChange={(e) => setNewCustomRole(e.target.value)}
+                      placeholder="Create custom role…"
+                      disabled={!canManageRoles}
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!canManageRoles || creatingCustomRole || !newCustomRole.trim()}
+                      className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50"
+                    >
+                      {creatingCustomRole ? 'Creating…' : 'Create Custom Role'}
+                    </button>
+                  </form>
+                </div>
 
                 <div className="mt-6 space-y-6">
                   <div className="flex flex-col gap-3 rounded-lg border border-slate-100 bg-slate-50/80 p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -291,9 +479,25 @@ export default function Workspace() {
                         {author?.email ?? '—'}
                       </p>
                     </div>
-                    <span className="inline-flex w-fit items-center rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-800">
-                      Project Lead
-                    </span>
+                    <div className="flex flex-col items-start gap-2 sm:items-end">
+                      <span className="inline-flex w-fit items-center rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-800">
+                        Project Lead
+                      </span>
+                      <select
+                        value={request.authorProjectRole || ''}
+                        onChange={(e) => handleUpdateProjectRole('author', e.target.value)}
+                        disabled={!canManageRoles}
+                        aria-label="Project role for author"
+                        className="mt-1 w-full min-w-[12rem] rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500 sm:w-auto"
+                      >
+                        <option value="">No project role</option>
+                        {(request?.availableCustomRoles || []).map((opt) => (
+                          <option key={opt} value={opt}>
+                            {opt}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
 
                   {helper ? (
@@ -307,18 +511,33 @@ export default function Workspace() {
                         </p>
                       </div>
                       <div className="flex flex-col gap-2 sm:items-end">
-                        <span className="inline-flex w-fit items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">
-                          Collaborator
-                        </span>
-                        <select
-                          disabled
-                          aria-label="Role (coming soon)"
-                          className="mt-1 w-full min-w-[10rem] rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-500 shadow-sm sm:w-auto"
-                          defaultValue="Frontend"
+                        <button
+                          type="button"
+                          onClick={handleToggleControlRole}
+                          disabled={!isLead}
+                          className={`inline-flex w-fit items-center rounded-full px-3 py-1 text-xs font-semibold ${
+                            request.helperControlRole === 'Co-Lead'
+                              ? 'bg-purple-100 text-purple-800'
+                              : 'bg-emerald-100 text-emerald-800'
+                          } ${isLead ? 'hover:opacity-90' : 'cursor-not-allowed opacity-80'}`}
+                          aria-label="Toggle control role"
+                          title={isLead ? 'Toggle Collaborator/Co-Lead' : 'Only the Project Lead can change this'}
                         >
-                          <option>Frontend</option>
-                          <option>Backend</option>
-                          <option>Design</option>
+                          {request.helperControlRole || 'Collaborator'}
+                        </button>
+                        <select
+                          value={request.helperProjectRole || ''}
+                          onChange={(e) => handleUpdateProjectRole('helper', e.target.value)}
+                          disabled={!canManageRoles}
+                          aria-label="Project role for helper"
+                          className="mt-1 w-full min-w-[12rem] rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500 sm:w-auto"
+                        >
+                          <option value="">No project role</option>
+                          {(request?.availableCustomRoles || []).map((opt) => (
+                            <option key={opt} value={opt}>
+                              {opt}
+                            </option>
+                          ))}
                         </select>
                       </div>
                     </div>
@@ -344,8 +563,8 @@ export default function Workspace() {
                     <input
                       id="resource-title"
                       type="text"
-                      value={resourceTitle}
-                      onChange={(e) => setResourceTitle(e.target.value)}
+                      value={newResourceTitle}
+                      onChange={(e) => setNewResourceTitle(e.target.value)}
                       placeholder="e.g. GitHub Repo"
                       className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                     />
@@ -359,8 +578,8 @@ export default function Workspace() {
                       type="text"
                       inputMode="url"
                       autoComplete="url"
-                      value={resourceUrl}
-                      onChange={(e) => setResourceUrl(e.target.value)}
+                      value={newResourceUrl}
+                      onChange={(e) => setNewResourceUrl(e.target.value)}
                       placeholder="https://…"
                       className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                     />
@@ -369,12 +588,12 @@ export default function Workspace() {
                     type="submit"
                     disabled={
                       addingResource ||
-                      !resourceTitle.trim() ||
-                      !resourceUrl.trim()
+                      !newResourceTitle.trim() ||
+                      !newResourceUrl.trim()
                     }
                     className="w-full rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 sm:w-auto"
                   >
-                    {addingResource ? 'Adding…' : 'Add Link'}
+                    {addingResource ? 'Adding...' : 'Add Link'}
                   </button>
                 </form>
 
@@ -402,9 +621,9 @@ export default function Workspace() {
                           </a>
                           <button
                             type="button"
-                            onClick={() => handleDeleteResource(rid)}
+                            onClick={() => handleRemoveResource(rid)}
                             disabled={busy}
-                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-rose-50 hover:text-rose-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+                            className="shrink-0 rounded px-1.5 py-0.5 text-sm font-medium text-rose-600 hover:bg-rose-50 hover:text-rose-800 focus:outline-none focus:ring-2 focus:ring-rose-500/40 disabled:opacity-50"
                             aria-label={`Remove ${res.title}`}
                             title="Remove link"
                           >
@@ -416,6 +635,33 @@ export default function Workspace() {
                   )}
                 </ul>
               </section>
+
+              <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+                <h2 className="text-lg font-semibold text-slate-800">Shared Scratchpad</h2>
+                <p className="mt-1 text-sm text-slate-600">
+                  Shared notes for ideas, links, and decisions in one place.
+                </p>
+
+                <textarea
+                  value={scratchpadText}
+                  onChange={(e) => setScratchpadText(e.target.value)}
+                  rows={10}
+                  className="mt-6 block w-full resize-y rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  placeholder="Write anything the team should see…"
+                />
+
+                <button
+                  type="button"
+                  onClick={handleSaveNotes}
+                  disabled={
+                    isSavingNotes ||
+                    scratchpadText === (request?.scratchpad ?? '')
+                  }
+                  className="mt-4 w-full rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 sm:w-auto"
+                >
+                  {isSavingNotes ? 'Saving…' : 'Save Notes'}
+                </button>
+              </section>
             </div>
 
             <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -423,6 +669,29 @@ export default function Workspace() {
               <p className="mt-1 text-sm text-slate-600">
                 Track work for this project. Checkboxes sync for everyone in the workspace.
               </p>
+
+              {(() => {
+                const safeTasks = Array.isArray(request?.tasks) ? request.tasks : []
+                const completedCount = safeTasks.filter((t) => t.isCompleted).length
+                const progressPercent =
+                  safeTasks.length === 0
+                    ? 0
+                    : Math.round((completedCount / safeTasks.length) * 100)
+
+                return (
+                  <div className="mt-6 flex items-center gap-3">
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
+                      <div
+                        className="h-full rounded-full bg-emerald-500 transition-[width] duration-300"
+                        style={{ width: `${progressPercent}%` }}
+                      />
+                    </div>
+                    <div className="shrink-0 text-xs font-semibold text-slate-700">
+                      {progressPercent}%
+                    </div>
+                  </div>
+                )
+              })()}
 
               <form onSubmit={handleAddTask} className="mt-6 flex flex-col gap-2 sm:flex-row sm:items-center">
                 <input
@@ -450,6 +719,9 @@ export default function Workspace() {
                   tasks.map((task) => {
                     const tid = task._id
                     const busy = togglingTaskId === tid
+                    const assigning = assigningTaskId === tid
+                    const assigneeValue =
+                      task?.assignee?._id || task?.assignee || ''
                     return (
                       <li
                         key={tid}
@@ -462,15 +734,35 @@ export default function Workspace() {
                           disabled={busy}
                           className="mt-0.5 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 disabled:opacity-50"
                         />
-                        <span
-                          className={`text-sm ${
-                            task.isCompleted
-                              ? 'text-slate-500 line-through'
-                              : 'font-medium text-slate-900'
-                          }`}
-                        >
-                          {task.title}
-                        </span>
+                        <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                          <span
+                            className={`text-sm ${
+                              task.isCompleted
+                                ? 'text-slate-500 line-through'
+                                : 'font-medium text-slate-900'
+                            }`}
+                          >
+                            {task.title}
+                          </span>
+
+                          <select
+                            value={String(assigneeValue)}
+                            disabled={assigning}
+                            onChange={(e) => handleAssignTask(tid, e.target.value)}
+                            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50 sm:w-auto"
+                            aria-label="Assign task"
+                          >
+                            <option value="">Unassigned</option>
+                            <option value={author?._id ?? ''}>
+                              {author?.name ? `Lead: ${author.name}` : 'Project Lead'}
+                            </option>
+                            {helper && (
+                              <option value={helper?._id ?? ''}>
+                                {helper?.name ? `Helper: ${helper.name}` : 'Collaborator'}
+                              </option>
+                            )}
+                          </select>
+                        </div>
                       </li>
                     )
                   })
