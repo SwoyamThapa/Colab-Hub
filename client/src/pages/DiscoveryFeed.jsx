@@ -1,32 +1,19 @@
-import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { jwtDecode } from 'jwt-decode'
+import { useContext, useEffect, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { AuthContext } from '../context/AuthContext.jsx'
 
 export default function DiscoveryFeed() {
   const [requests, setRequests] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [currentUserId, setCurrentUserId] = useState(null)
+  const { user: currentUser } = useContext(AuthContext)
 
   const navigate = useNavigate()
 
   useEffect(() => {
-    const token = localStorage.getItem('token')
-    if (!token) return
-
-    try {
-      const decoded = jwtDecode(token)
-      // Token payload is signed as: { userId, email } (see server authController)
-      setCurrentUserId(decoded?.userId ?? null)
-    } catch {
-      setCurrentUserId(null)
-    }
-  }, [])
-
-  useEffect(() => {
     const fetchRequests = async () => {
       try {
-        const res = await fetch('http://localhost:5005/api/requests')
+        const res = await fetch('/api/requests')
         if (!res.ok) {
           throw new Error('Failed to load requests')
         }
@@ -50,35 +37,31 @@ export default function DiscoveryFeed() {
     fetchRequests()
   }, [])
 
-  const handleAcceptRequest = async (requestId) => {
+  const handleApplyForProject = async (requestId) => {
     setError(null)
 
     const token = localStorage.getItem('token')
     if (!token) {
-      setError('You must be logged in to accept requests.')
+      setError('You must be logged in to apply.')
       return
     }
 
     try {
-      const res = await fetch(
-        `http://localhost:5005/api/requests/${requestId}/accept`,
-        {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      )
+      const res = await fetch(`/api/requests/${requestId}/apply`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      })
 
       const data = await res.json().catch(() => null)
 
       if (!res.ok) {
-        setError(data?.message || 'Failed to accept request')
+        setError(data?.message || 'Failed to apply')
         return
       }
 
-      // Update the specific request in-place so the UI changes immediately.
       setRequests((prev) =>
         prev.map((r) => (r._id === requestId ? data : r))
       )
@@ -146,7 +129,17 @@ export default function DiscoveryFeed() {
                     </div>
 
                     <p className="mt-2 text-sm text-slate-500">
-                      by {request.author?.name ?? 'Unknown author'}
+                      by{' '}
+                      {request.author?._id || request.author ? (
+                        <Link
+                          to={`/profile/${request.author?._id ?? request.author}`}
+                          className="font-medium text-indigo-600 hover:text-indigo-500"
+                        >
+                          {request.author?.name ?? 'Unknown author'}
+                        </Link>
+                      ) : (
+                        <span>{request.author?.name ?? 'Unknown author'}</span>
+                      )}
                     </p>
                   </header>
 
@@ -155,22 +148,29 @@ export default function DiscoveryFeed() {
                   </p>
 
                   <div className="mt-4">
-                    {request.status === 'pending' && currentUserId && (
+                    {request.status === 'pending' && currentUser?.id && (
                       (() => {
                         const authorId =
                           request.author?._id ?? request.author ?? null
                         const isOwnRequest =
-                          authorId != null && String(authorId) === String(currentUserId)
+                          authorId != null &&
+                          String(authorId) === String(currentUser.id)
 
                         if (isOwnRequest) return null
+
+                        const hasApplied = request.applicants?.some(
+                          (a) =>
+                            String(a?._id ?? a) === String(currentUser.id)
+                        )
 
                         return (
                           <button
                             type="button"
-                            onClick={() => handleAcceptRequest(request._id)}
-                            className="inline-flex w-full items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+                            disabled={hasApplied}
+                            onClick={() => handleApplyForProject(request._id)}
+                            className="inline-flex w-full items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
                           >
-                            Offer Help
+                            {hasApplied ? 'Applied' : 'Apply to Join'}
                           </button>
                         )
                       })()

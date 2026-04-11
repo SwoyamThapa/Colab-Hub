@@ -20,9 +20,21 @@ const userSchema = new mongoose.Schema(
       required: true,
       minlength: 6,
     },
+    bio: {
+      type: String,
+      default: '',
+    },
     skills: {
       type: [String],
       default: [],
+    },
+    githubLink: {
+      type: String,
+      default: '',
+    },
+    linkedIn: {
+      type: String,
+      default: '',
     },
   },
   { timestamps: true }

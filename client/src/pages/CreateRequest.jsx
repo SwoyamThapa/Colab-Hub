@@ -29,7 +29,7 @@ export default function CreateRequest() {
       // Guard should prevent reaching here without a token, but keep it defensive.
       if (!token) throw new Error('You must be logged in to create a request.')
 
-      const res = await fetch('http://localhost:5005/api/requests', {
+      const res = await fetch('/api/requests', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

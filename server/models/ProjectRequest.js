@@ -96,6 +96,10 @@ const projectRequestSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    applicants: {
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+      default: [],
+    },
   },
   { timestamps: true }
 );

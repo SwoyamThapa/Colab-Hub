@@ -1,4 +1,5 @@
 import ProjectRequest from '../models/ProjectRequest.js';
+import Message from '../models/Message.js';
 
 function canAccessWorkspace(requestDoc, userId) {
   const authorId =
@@ -16,6 +17,7 @@ async function populateRequestForResponse(id) {
   return ProjectRequest.findById(id)
     .populate('author', 'name email')
     .populate('helper', 'name email')
+    .populate('applicants', 'name email')
     .populate('tasks.assignee', 'name email');
 }
 
@@ -65,6 +67,7 @@ export const getAllRequests = async (req, res) => {
   try {
     const requests = await ProjectRequest.find()
       .populate('author', 'name')
+      .populate('applicants', 'name email')
       .sort({ createdAt: -1 });
 
     return res.json(requests);
@@ -93,6 +96,36 @@ export const getRequestById = async (req, res) => {
     }
 
     return res.json(request);
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+export const getChatHistory = async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user?.id;
+
+  if (!userId) {
+    return res.status(401).json({ message: 'Unauthorized' });
+  }
+
+  try {
+    const request = await ProjectRequest.findById(id);
+
+    if (!request) {
+      return res.status(404).json({ message: 'Request not found' });
+    }
+
+    if (!canAccessWorkspace(request, userId)) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    const messages = await Message.find({ request: id })
+      .populate('sender', 'name')
+      .sort({ createdAt: 1 })
+      .lean();
+
+    return res.json(messages);
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
@@ -417,6 +450,91 @@ export const updateProjectRole = async (req, res) => {
   }
 };
 
+export const applyForProject = async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user?.id;
+
+  if (!userId) {
+    return res.status(401).json({ message: 'Unauthorized' });
+  }
+
+  try {
+    const request = await ProjectRequest.findById(id);
+
+    if (!request) {
+      return res.status(404).json({ message: 'Request not found' });
+    }
+
+    if (String(request.author) === String(userId)) {
+      return res.status(400).json({ message: 'You cannot apply to your own project' });
+    }
+
+    if (request.status !== 'pending') {
+      return res.status(400).json({ message: 'This request is not accepting applications' });
+    }
+
+    if (request.helper && String(request.helper) === String(userId)) {
+      return res.status(400).json({ message: 'You are already the collaborator on this project' });
+    }
+
+    const already = (request.applicants || []).some(
+      (a) => String(a) === String(userId)
+    );
+    if (!already) {
+      request.applicants.push(userId);
+      await request.save();
+    }
+
+    const populated = await populateRequestForResponse(id);
+    return res.status(already ? 200 : 201).json(populated);
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+export const manageApplicant = async (req, res) => {
+  const { id, applicantId } = req.params;
+  const userId = req.user?.id;
+  const { action } = req.body;
+
+  if (!userId) {
+    return res.status(401).json({ message: 'Unauthorized' });
+  }
+
+  if (action !== 'accept' && action !== 'decline') {
+    return res.status(400).json({ message: 'action must be accept or decline' });
+  }
+
+  try {
+    const request = await ProjectRequest.findById(id);
+
+    if (!request) {
+      return res.status(404).json({ message: 'Request not found' });
+    }
+
+    if (request.author.toString() !== String(userId)) {
+      return res.status(403).json({ message: 'Only the project lead can manage applicants' });
+    }
+
+    if (action === 'accept') {
+      request.helper = applicantId;
+      request.status = 'accepted';
+      request.applicants = [];
+      await request.save();
+    } else {
+      request.applicants = (request.applicants || []).filter(
+        (a) => String(a) !== String(applicantId)
+      );
+      await request.save();
+    }
+
+    const populated = await populateRequestForResponse(id);
+    return res.json(populated);
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
 export const updateControlRole = async (req, res) => {
   const { id } = req.params;
   const { role } = req.body;
@@ -478,10 +596,12 @@ export const acceptRequest = async (req, res) => {
 
     request.status = 'accepted';
     request.helper = userId;
+    request.applicants = [];
 
     await request.save();
 
-    return res.json(request);
+    const populated = await populateRequestForResponse(id);
+    return res.json(populated);
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }

@@ -1,6 +1,9 @@
-import { useContext, useEffect, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useContext, useEffect, useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { io } from 'socket.io-client'
 import { AuthContext } from '../context/AuthContext.jsx'
+
+const socket = io('http://localhost:5001', { withCredentials: true })
 
 function authHeadersJson() {
   const token = localStorage.getItem('token')
@@ -48,8 +51,8 @@ export default function Workspace() {
   const [deletingResourceId, setDeletingResourceId] = useState(null)
   const [newCustomRole, setNewCustomRole] = useState('')
   const [creatingCustomRole, setCreatingCustomRole] = useState(false)
-  const [scratchpadText, setScratchpadText] = useState('')
-  const [isSavingNotes, setIsSavingNotes] = useState(false)
+  const [messages, setMessages] = useState([])
+  const [currentMessage, setCurrentMessage] = useState('')
 
   useEffect(() => {
     if (!user) {
@@ -118,10 +121,63 @@ export default function Workspace() {
   }, [user, id, navigate])
 
   useEffect(() => {
-    if (request && request.scratchpad !== undefined) {
-      setScratchpadText(request.scratchpad)
+    if (!user?.id || !id || !request) return
+
+    let cancelled = false
+
+    const loadHistory = async () => {
+      try {
+        const res = await fetch(`/api/requests/${id}/messages`, {
+          headers: authHeaders(),
+        })
+
+        if (res.status === 401) {
+          navigate('/login', { replace: true })
+          return
+        }
+
+        if (!res.ok) return
+
+        const data = await res.json().catch(() => [])
+        if (!cancelled) setMessages(Array.isArray(data) ? data : [])
+      } catch {
+        if (!cancelled) setMessages([])
+      }
     }
-  }, [request])
+
+    loadHistory()
+    socket.emit('join_workspace', id)
+
+    const onReceive = (newMsg) => {
+      setMessages((prev) => {
+        const exists = prev.some(
+          (m) => String(m._id) === String(newMsg._id)
+        )
+        if (exists) return prev
+        return [...prev, newMsg]
+      })
+    }
+
+    socket.on('receive_message', onReceive)
+
+    return () => {
+      cancelled = true
+      socket.emit('leave_workspace', id)
+      socket.off('receive_message', onReceive)
+    }
+  }, [user, id, request, navigate])
+
+  const sendMessage = () => {
+    if (currentMessage.trim() === '') return
+    if (!id || !user?.id) return
+
+    socket.emit('send_message', {
+      requestId: id,
+      senderId: user.id,
+      text: currentMessage,
+    })
+    setCurrentMessage('')
+  }
 
   const handleAddTask = async (e) => {
     e.preventDefault()
@@ -348,34 +404,6 @@ export default function Workspace() {
     }
   }
 
-  const handleSaveNotes = async () => {
-    if (!id) return
-
-    setIsSavingNotes(true)
-    try {
-      const res = await fetch(`/api/requests/${id}/scratchpad`, {
-        method: 'PUT',
-        headers: authHeadersJson(),
-        body: JSON.stringify({ text: scratchpadText }),
-      })
-
-      if (res.status === 401) {
-        navigate('/login', { replace: true })
-        return
-      }
-
-      if (!res.ok) {
-        return
-      }
-
-      const data = await res.json()
-      setRequest(data)
-      // Keep local text; request.scratchpad is now synced.
-    } finally {
-      setIsSavingNotes(false)
-    }
-  }
-
   if (!user) {
     return null
   }
@@ -473,7 +501,16 @@ export default function Workspace() {
                   <div className="flex flex-col gap-3 rounded-lg border border-slate-100 bg-slate-50/80 p-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <p className="text-sm font-semibold text-slate-900">
-                        {author?.name ?? 'Unknown'}
+                        {author?._id || author ? (
+                          <Link
+                            to={`/profile/${author?._id ?? author}`}
+                            className="text-indigo-600 hover:text-indigo-500 hover:underline"
+                          >
+                            {author?.name ?? 'Unknown'}
+                          </Link>
+                        ) : (
+                          author?.name ?? 'Unknown'
+                        )}
                       </p>
                       <p className="mt-0.5 text-sm text-slate-600">
                         {author?.email ?? '—'}
@@ -504,7 +541,16 @@ export default function Workspace() {
                     <div className="flex flex-col gap-3 rounded-lg border border-slate-100 bg-slate-50/80 p-4 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-semibold text-slate-900">
-                          {helper?.name ?? 'Unknown'}
+                          {helper?._id || helper ? (
+                            <Link
+                              to={`/profile/${helper?._id ?? helper}`}
+                              className="text-indigo-600 hover:text-indigo-500 hover:underline"
+                            >
+                              {helper?.name ?? 'Unknown'}
+                            </Link>
+                          ) : (
+                            helper?.name ?? 'Unknown'
+                          )}
                         </p>
                         <p className="mt-0.5 text-sm text-slate-600">
                           {helper?.email ?? '—'}
@@ -637,30 +683,70 @@ export default function Workspace() {
               </section>
 
               <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-                <h2 className="text-lg font-semibold text-slate-800">Shared Scratchpad</h2>
+                <h2 className="text-lg font-semibold text-slate-800">Team Chat</h2>
                 <p className="mt-1 text-sm text-slate-600">
-                  Shared notes for ideas, links, and decisions in one place.
+                  Messages sync in real time for everyone in this workspace.
                 </p>
 
-                <textarea
-                  value={scratchpadText}
-                  onChange={(e) => setScratchpadText(e.target.value)}
-                  rows={10}
-                  className="mt-6 block w-full resize-y rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                  placeholder="Write anything the team should see…"
-                />
-
-                <button
-                  type="button"
-                  onClick={handleSaveNotes}
-                  disabled={
-                    isSavingNotes ||
-                    scratchpadText === (request?.scratchpad ?? '')
-                  }
-                  className="mt-4 w-full rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 sm:w-auto"
-                >
-                  {isSavingNotes ? 'Saving…' : 'Save Notes'}
-                </button>
+                <div className="mt-4 flex h-96 flex-col rounded-lg border border-slate-200 bg-slate-50/80">
+                  <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
+                    {messages.length === 0 ? (
+                      <p className="text-center text-sm text-slate-500">
+                        No messages yet. Say hello below.
+                      </p>
+                    ) : (
+                      messages.map((msg) => {
+                        const sid = msg.sender?._id ?? msg.sender
+                        const isOwn = idEquals(sid, user.id)
+                        return (
+                          <div
+                            key={msg._id}
+                            className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}
+                          >
+                            <div
+                              className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm shadow-sm ${
+                                isOwn
+                                  ? 'rounded-br-md bg-indigo-600 text-white'
+                                  : 'rounded-bl-md bg-white text-slate-800 ring-1 ring-slate-200'
+                              }`}
+                            >
+                              {!isOwn && (
+                                <p className="mb-1 text-xs font-semibold text-slate-500">
+                                  {msg.sender?.name ?? 'Teammate'}
+                                </p>
+                              )}
+                              <p className="whitespace-pre-wrap break-words">
+                                {msg.text}
+                              </p>
+                            </div>
+                          </div>
+                        )
+                      })
+                    )}
+                  </div>
+                  <div className="flex gap-2 border-t border-slate-200 bg-white p-3">
+                    <input
+                      type="text"
+                      value={currentMessage}
+                      onChange={(e) => setCurrentMessage(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          sendMessage()
+                        }
+                      }}
+                      placeholder="Type a message…"
+                      className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={sendMessage}
+                      className="shrink-0 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                    >
+                      Send
+                    </button>
+                  </div>
+                </div>
               </section>
             </div>
 

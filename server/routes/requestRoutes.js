@@ -3,6 +3,7 @@ import {
   createRequest,
   getAllRequests,
   getRequestById,
+  getChatHistory,
   addTask,
   toggleTask,
   assignTask,
@@ -15,6 +16,8 @@ import {
   deleteRequest,
   updateRequestStatus,
   acceptRequest,
+  applyForProject,
+  manageApplicant,
 } from '../controllers/requestController.js';
 import { protect } from '../middleware/authMiddleware.js';
 
@@ -37,11 +40,16 @@ router.delete('/:id/resources/:resourceId', protect, removeResource);
 // Protected: accept a pending request
 router.put('/:id/accept', protect, acceptRequest);
 
+router.post('/:id/apply', protect, applyForProject);
+router.put('/:id/applicants/:applicantId', protect, manageApplicant);
+
 router.post('/:id/customRoles', protect, addCustomRole);
 router.put('/:id/projectRole', protect, updateProjectRole);
 router.put('/:id/controlRole', protect, updateControlRole);
 
 router.put('/:id/scratchpad', protect, saveScratchpad);
+
+router.get('/:id/messages', protect, getChatHistory);
 
 // Protected: author (Project Lead) can delete/update their request
 router.delete('/:id', protect, deleteRequest);

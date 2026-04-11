@@ -2,8 +2,6 @@ import { useContext, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AuthContext } from '../context/AuthContext.jsx'
 
-const API_BASE = 'http://localhost:5005'
-
 export default function Dashboard() {
   const navigate = useNavigate()
   const { user } = useContext(AuthContext)
@@ -25,7 +23,7 @@ export default function Dashboard() {
 
     const fetchRequests = async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/requests`)
+        const res = await fetch('/api/requests')
         if (!res.ok) {
           throw new Error('Failed to load your requests')
         }
@@ -89,7 +87,7 @@ export default function Dashboard() {
       }
 
       setError(null)
-      const res = await fetch(`${API_BASE}/api/requests/${idToDelete}`, {
+      const res = await fetch(`/api/requests/${idToDelete}`, {
         method: 'DELETE',
         headers: {
           ...authHeaders(),
@@ -126,7 +124,7 @@ export default function Dashboard() {
       }
 
       setError(null)
-      const res = await fetch(`${API_BASE}/api/requests/${idToComplete}/status`, {
+      const res = await fetch(`/api/requests/${idToComplete}/status`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -149,6 +147,49 @@ export default function Dashboard() {
       const updated = await res.json()
       setRequests((prev) =>
         prev.map((r) => (String(r?._id) === String(idToComplete) ? updated : r))
+      )
+    } catch (err) {
+      setError(err?.message || 'Something went wrong')
+    }
+  }
+
+  const handleManageApplicant = async (requestId, applicantId, action) => {
+    if (!requestId || !applicantId) return
+
+    try {
+      const token = localStorage.getItem('token')
+      if (!token) {
+        navigate('/login', { replace: true })
+        return
+      }
+
+      setError(null)
+      const res = await fetch(
+        `/api/requests/${requestId}/applicants/${applicantId}`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            ...authHeaders(),
+          },
+          body: JSON.stringify({ action }),
+        }
+      )
+
+      if (res.status === 401) {
+        navigate('/login', { replace: true })
+        return
+      }
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null)
+        setError(data?.message || 'Failed to update applicant')
+        return
+      }
+
+      const updated = await res.json()
+      setRequests((prev) =>
+        prev.map((r) => (String(r?._id) === String(requestId) ? updated : r))
       )
     } catch (err) {
       setError(err?.message || 'Something went wrong')
@@ -226,6 +267,86 @@ export default function Dashboard() {
                         {r.description}
                       </p>
 
+                      <div className="mt-3 text-xs text-slate-600">
+                        {r.helper?._id || r.helper ? (
+                          <>
+                            Collaborator:{' '}
+                            <Link
+                              to={`/profile/${r.helper?._id ?? r.helper}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-medium text-indigo-600 hover:text-indigo-500 hover:underline"
+                            >
+                              {r.helper?.name ?? 'View profile'}
+                            </Link>
+                            <span className="ml-1 text-slate-500">
+                              (opens in a new tab)
+                            </span>
+                          </>
+                        ) : r.status === 'pending' ? (
+                          <span className="text-slate-500">
+                            No collaborator yet. When you accept an applicant from the queue
+                            below or someone joins via the feed, their name will appear here.
+                          </span>
+                        ) : null}
+                      </div>
+
+                      {r.status === 'pending' && r.applicants?.length > 0 && (
+                          <div className="mt-4 rounded-lg border border-indigo-100 bg-indigo-50/60 p-3">
+                            <p className="text-xs font-semibold text-indigo-900">
+                              Applicants Queue
+                            </p>
+                            <ul className="mt-2 space-y-2">
+                              {r.applicants.map((applicant) => {
+                                const aid = applicant?._id ?? applicant
+                                const name =
+                                  applicant?.name ?? 'Unknown'
+                                return (
+                                  <li
+                                    key={String(aid)}
+                                    className="flex flex-wrap items-center gap-2 rounded-md border border-slate-200 bg-white px-2 py-2 text-xs"
+                                  >
+                                    <Link
+                                      to={`/profile/${aid}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="min-w-0 flex-1 font-medium text-indigo-600 hover:text-indigo-500 hover:underline"
+                                    >
+                                      {name}
+                                    </Link>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        handleManageApplicant(
+                                          r._id,
+                                          aid,
+                                          'accept'
+                                        )
+                                      }
+                                      className="rounded-md bg-emerald-600 px-2 py-1 font-semibold text-white hover:bg-emerald-500"
+                                    >
+                                      Accept
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        handleManageApplicant(
+                                          r._id,
+                                          aid,
+                                          'decline'
+                                        )
+                                      }
+                                      className="rounded-md bg-rose-600 px-2 py-1 font-semibold text-white hover:bg-rose-500"
+                                    >
+                                      Decline
+                                    </button>
+                                  </li>
+                                )
+                              })}
+                            </ul>
+                          </div>
+                        )}
+
                       <div className="mt-4 flex flex-wrap gap-2">
                         <button
                           type="button"
@@ -295,9 +416,18 @@ export default function Dashboard() {
                       <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div className="text-xs text-slate-600">
                           Author:{' '}
-                          <span className="font-medium">
-                            {r.author?.name ?? 'Unknown author'}
-                          </span>
+                          {r.author?._id || r.author ? (
+                            <Link
+                              to={`/profile/${r.author?._id ?? r.author}`}
+                              className="font-medium text-indigo-600 hover:text-indigo-500"
+                            >
+                              {r.author?.name ?? 'Unknown author'}
+                            </Link>
+                          ) : (
+                            <span className="font-medium">
+                              {r.author?.name ?? 'Unknown author'}
+                            </span>
+                          )}
                         </div>
                         <button
                           type="button"

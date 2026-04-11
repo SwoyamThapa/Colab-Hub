@@ -6,7 +6,9 @@ import Register from './pages/Register.jsx'
 import CreateRequest from './pages/CreateRequest.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import Workspace from './pages/Workspace.jsx'
+import Profile from './pages/Profile.jsx'
 import Navbar from './components/Navbar.jsx'
+import ProtectedRoute from './components/ProtectedRoute.jsx'
 
 export default function App() {
   return (
@@ -23,6 +25,14 @@ export default function App() {
           element={<Dashboard />}
         />
         <Route path="/workspace/:id" element={<Workspace />} />
+        <Route
+          path="/profile/:id"
+          element={
+            <ProtectedRoute>
+              <Profile />
+            </ProtectedRoute>
+          }
+        />
       </Routes>
     </BrowserRouter>
   )
