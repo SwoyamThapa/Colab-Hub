@@ -881,7 +881,7 @@ export default function Workspace() {
                     Team Chat
                   </h2>
                   <p className="mt-1 text-sm text-slate-600">
-                    Messages sync in real time for everyone in this workspace.
+                    Before message type @ColabBot, for bot to respond.
                   </p>
 
                   <div className="mt-4 flex min-h-[min(28rem,75vh)] flex-1 flex-col rounded-lg border border-slate-200 bg-slate-50/80">
