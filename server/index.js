@@ -26,6 +26,36 @@ console.log('Bot is active on Free Tier.');
 const app = express();
 const PORT = process.env.PORT || 5001;
 
+function resolveCorsOrigin() {
+  const raw = process.env.CORS_ORIGINS;
+  if (raw == null || String(raw).trim() === '') {
+    return true;
+  }
+  const list = String(raw)
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
+  if (list.length === 0) {
+    return true;
+  }
+  if (list.length === 1 && list[0] === '*') {
+    return (origin, callback) => {
+      callback(null, true);
+    };
+  }
+  return (origin, callback) => {
+    if (!origin) {
+      return callback(null, true);
+    }
+    if (list.includes(origin)) {
+      return callback(null, true);
+    }
+    callback(new Error('Not allowed by CORS'));
+  };
+}
+
+const corsOrigin = resolveCorsOrigin();
+
 function canAccessWorkspaceForSocket(requestDoc, userId) {
   const authorId =
     requestDoc.author?._id?.toString?.() ?? String(requestDoc.author);
@@ -41,7 +71,7 @@ function canAccessWorkspaceForSocket(requestDoc, userId) {
 // Middleware
 app.use(
   cors({
-    origin: true,
+    origin: corsOrigin,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
@@ -80,7 +110,7 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: true,
+    origin: corsOrigin,
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     credentials: true,
   },
@@ -200,7 +230,10 @@ io.on('connection', (socket) => {
 const startServer = async () => {
   await connectDB();
   server.listen(PORT, () => {
-    console.log(`Colab Hub server running at http://localhost:${PORT}`);
+    const host = process.env.RAILWAY_PUBLIC_DOMAIN || 'localhost';
+    const scheme = process.env.RAILWAY_PUBLIC_DOMAIN ? 'https' : 'http';
+    const url = host === 'localhost' ? `http://localhost:${PORT}` : `${scheme}://${host}`;
+    console.log(`Colab Hub server running (${url})`);
   });
 };
 

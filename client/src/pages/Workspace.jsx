@@ -2,8 +2,12 @@ import { useContext, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { io } from 'socket.io-client'
 import { AuthContext } from '../context/AuthContext.jsx'
+import { apiUrl, getApiBase } from '../config/apiConfig.js'
 
-const socket = io('http://localhost:5001', { withCredentials: true })
+const socketBase = getApiBase()
+const socket = socketBase
+  ? io(socketBase, { withCredentials: true })
+  : io({ withCredentials: true, path: '/socket.io' })
 
 function authHeadersJson() {
   const token = localStorage.getItem('token')
@@ -89,7 +93,7 @@ export default function Workspace() {
       }
 
       try {
-        const res = await fetch(`/api/requests/${id}`, {
+        const res = await fetch(apiUrl(`/api/requests/${id}`), {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -140,7 +144,7 @@ export default function Workspace() {
 
     const loadHistory = async () => {
       try {
-        const res = await fetch(`/api/requests/${id}/messages`, {
+        const res = await fetch(apiUrl(`/api/requests/${id}/messages`), {
           headers: authHeaders(),
         })
 
@@ -199,7 +203,7 @@ export default function Workspace() {
 
     setAddingTask(true)
     try {
-      const res = await fetch(`/api/requests/${id}/tasks`, {
+      const res = await fetch(apiUrl(`/api/requests/${id}/tasks`), {
         method: 'POST',
         headers: authHeadersJson(),
         body: JSON.stringify({
@@ -231,7 +235,7 @@ export default function Workspace() {
 
     setTogglingTaskId(taskId)
     try {
-      const res = await fetch(`/api/requests/${id}/tasks/${taskId}`, {
+      const res = await fetch(apiUrl(`/api/requests/${id}/tasks/${taskId}`), {
         method: 'PUT',
         headers: authHeaders(),
       })
@@ -257,7 +261,7 @@ export default function Workspace() {
 
     setAssigningTaskId(taskId)
     try {
-      const res = await fetch(`/api/requests/${id}/tasks/${taskId}/assign`, {
+      const res = await fetch(apiUrl(`/api/requests/${id}/tasks/${taskId}/assign`), {
         method: 'PUT',
         headers: authHeadersJson(),
         body: JSON.stringify({ assigneeId: assigneeId || '' }),
@@ -287,7 +291,7 @@ export default function Workspace() {
 
     setAddingResource(true)
     try {
-      const res = await fetch(`/api/requests/${id}/resources`, {
+      const res = await fetch(apiUrl(`/api/requests/${id}/resources`), {
         method: 'POST',
         headers: authHeadersJson(),
         body: JSON.stringify({ title: t, url: u }),
@@ -316,7 +320,7 @@ export default function Workspace() {
 
     setDeletingResourceId(resourceId)
     try {
-      const res = await fetch(`/api/requests/${id}/resources/${resourceId}`, {
+      const res = await fetch(apiUrl(`/api/requests/${id}/resources/${resourceId}`), {
         method: 'DELETE',
         headers: authHeaders(),
       })
@@ -344,7 +348,7 @@ export default function Workspace() {
 
     setCreatingCustomRole(true)
     try {
-      const res = await fetch(`/api/requests/${id}/customRoles`, {
+      const res = await fetch(apiUrl(`/api/requests/${id}/customRoles`), {
         method: 'POST',
         headers: authHeadersJson(),
         body: JSON.stringify({ role }),
@@ -371,7 +375,7 @@ export default function Workspace() {
     if (!id) return
 
     try {
-      const res = await fetch(`/api/requests/${id}/projectRole`, {
+      const res = await fetch(apiUrl(`/api/requests/${id}/projectRole`), {
         method: 'PUT',
         headers: authHeadersJson(),
         body: JSON.stringify({ targetUser, role }),
@@ -399,7 +403,7 @@ export default function Workspace() {
       request.helperControlRole === 'Co-Lead' ? 'Collaborator' : 'Co-Lead'
 
     try {
-      const res = await fetch(`/api/requests/${id}/controlRole`, {
+      const res = await fetch(apiUrl(`/api/requests/${id}/controlRole`), {
         method: 'PUT',
         headers: authHeadersJson(),
         body: JSON.stringify({ role: next }),

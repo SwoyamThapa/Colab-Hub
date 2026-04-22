@@ -1,6 +1,7 @@
 import { useContext, useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AuthContext } from '../context/AuthContext.jsx'
+import { apiUrl } from '../config/apiConfig.js'
 
 export default function DiscoveryFeed() {
   const [requests, setRequests] = useState([])
@@ -13,7 +14,7 @@ export default function DiscoveryFeed() {
   useEffect(() => {
     const fetchRequests = async () => {
       try {
-        const res = await fetch('/api/requests')
+        const res = await fetch(apiUrl('/api/requests'))
         if (!res.ok) {
           throw new Error('Failed to load requests')
         }
@@ -47,7 +48,7 @@ export default function DiscoveryFeed() {
     }
 
     try {
-      const res = await fetch(`/api/requests/${requestId}/apply`, {
+      const res = await fetch(apiUrl(`/api/requests/${requestId}/apply`), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

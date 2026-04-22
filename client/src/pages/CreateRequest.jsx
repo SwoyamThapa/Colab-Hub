@@ -1,6 +1,7 @@
 import { useContext, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AuthContext } from '../context/AuthContext.jsx'
+import { apiUrl } from '../config/apiConfig.js'
 
 const CATEGORIES = ['Web Dev', 'Mobile App', 'AI/ML', 'Design', 'Data Science']
 
@@ -29,7 +30,7 @@ export default function CreateRequest() {
       // Guard should prevent reaching here without a token, but keep it defensive.
       if (!token) throw new Error('You must be logged in to create a request.')
 
-      const res = await fetch('/api/requests', {
+      const res = await fetch(apiUrl('/api/requests'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

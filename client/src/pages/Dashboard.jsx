@@ -1,6 +1,7 @@
 import { useContext, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AuthContext } from '../context/AuthContext.jsx'
+import { apiUrl } from '../config/apiConfig.js'
 
 export default function Dashboard() {
   const navigate = useNavigate()
@@ -23,7 +24,7 @@ export default function Dashboard() {
 
     const fetchRequests = async () => {
       try {
-        const res = await fetch('/api/requests')
+        const res = await fetch(apiUrl('/api/requests'))
         if (!res.ok) {
           throw new Error('Failed to load your requests')
         }
@@ -87,7 +88,7 @@ export default function Dashboard() {
       }
 
       setError(null)
-      const res = await fetch(`/api/requests/${idToDelete}`, {
+      const res = await fetch(apiUrl(`/api/requests/${idToDelete}`), {
         method: 'DELETE',
         headers: {
           ...authHeaders(),
@@ -124,7 +125,7 @@ export default function Dashboard() {
       }
 
       setError(null)
-      const res = await fetch(`/api/requests/${idToComplete}/status`, {
+      const res = await fetch(apiUrl(`/api/requests/${idToComplete}/status`), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -165,7 +166,7 @@ export default function Dashboard() {
 
       setError(null)
       const res = await fetch(
-        `/api/requests/${requestId}/applicants/${applicantId}`,
+        apiUrl(`/api/requests/${requestId}/applicants/${applicantId}`),
         {
           method: 'PUT',
           headers: {

@@ -1,6 +1,7 @@
 import { useContext, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { AuthContext } from '../context/AuthContext.jsx'
+import { apiUrl } from '../config/apiConfig.js'
 
 function authHeadersJson() {
   const token = localStorage.getItem('token')
@@ -58,7 +59,7 @@ export default function Profile() {
       setLoading(true)
       setError(null)
       try {
-        const res = await fetch(`/api/users/${id}`)
+        const res = await fetch(apiUrl(`/api/users/${id}`))
         if (!res.ok) {
           const data = await res.json().catch(() => null)
           throw new Error(data?.message || 'Failed to load profile')
@@ -121,7 +122,7 @@ export default function Profile() {
     e.preventDefault()
     setSavingProfile(true)
     try {
-      const res = await fetch('/api/users/profile', {
+      const res = await fetch(apiUrl('/api/users/profile'), {
         method: 'PUT',
         headers: authHeadersJson(),
         body: JSON.stringify({

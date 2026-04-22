@@ -1,6 +1,7 @@
 import { useContext, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AuthContext } from '../context/AuthContext.jsx'
+import { apiUrl } from '../config/apiConfig.js'
 
 export default function Register() {
   const [name, setName] = useState('')
@@ -17,7 +18,7 @@ export default function Register() {
     setLoading(true)
 
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await fetch(apiUrl('/api/auth/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: 'demouser@gmail.com', password: 'login123' }),
@@ -56,7 +57,7 @@ export default function Register() {
     setLoading(true)
 
     try {
-      const res = await fetch('/api/auth/register', {
+      const res = await fetch(apiUrl('/api/auth/register'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, email, password }),
