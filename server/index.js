@@ -1,4 +1,7 @@
-import 'dotenv/config';
+import * as dotenv from 'dotenv';
+dotenv.config();
+
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import http from 'http';
 import express from 'express';
 import cors from 'cors';
@@ -10,6 +13,15 @@ import requestRoutes from './routes/requestRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import Message from './models/Message.js';
 import ProjectRequest from './models/ProjectRequest.js';
+
+console.log(
+  'Loaded API Key:',
+  process.env.GEMINI_API_KEY
+    ? process.env.GEMINI_API_KEY.substring(0, 5) + '...'
+    : 'UNDEFINED'
+);
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY.trim());
+console.log('Bot is active on Free Tier.');
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -113,6 +125,72 @@ io.on('connection', (socket) => {
         .lean();
 
       io.to(String(requestId)).emit('receive_message', savedMessage);
+
+      if (trimmed.includes('@ColabBot')) {
+        const prompt = trimmed.replace('@ColabBot', '').trim();
+        const botUserId = process.env.BOT_USER_ID;
+
+        const saveAndEmitBotMessage = async (messageText) => {
+          if (!botUserId) {
+            return;
+          }
+          const botDoc = await Message.create({
+            request: requestId,
+            sender: botUserId,
+            text: messageText,
+          });
+          const populatedBotMessage = await Message.findById(botDoc._id)
+            .populate('sender', 'name')
+            .lean();
+          io.to(String(requestId)).emit('receive_message', populatedBotMessage);
+        };
+
+        if (!botUserId) {
+          console.error('ColabBot: BOT_USER_ID is not set; cannot post bot messages.');
+        } else if (!process.env.GEMINI_API_KEY) {
+          console.error('ColabBot: GEMINI_API_KEY is not set.');
+          try {
+            await saveAndEmitBotMessage(
+              'ColabBot is not configured: add GEMINI_API_KEY on the server.'
+            );
+          } catch (err) {
+            console.error('ColabBot: failed to save missing-key notice', err);
+          }
+        } else if (!prompt) {
+          try {
+            await saveAndEmitBotMessage(
+              'ColabBot: add a message after @ColabBot, e.g. @ColabBot Summarize the project status.'
+            );
+          } catch (err) {
+            console.error('ColabBot: failed to save empty-prompt notice', err);
+          }
+        } else {
+          try {
+            const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+            const result = await model.generateContent(prompt);
+            const botResponse = result.response.text();
+
+            const botDoc = await Message.create({
+              request: requestId,
+              sender: botUserId,
+              text: botResponse,
+            });
+            const populatedBotMessage = await Message.findById(botDoc._id)
+              .populate('sender', 'name')
+              .lean();
+            io.to(String(requestId)).emit('receive_message', populatedBotMessage);
+          } catch (err) {
+            console.error('ColabBot AI error', err);
+            try {
+              await saveAndEmitBotMessage(
+                "Sorry, ColabBot couldn't process that. Please try again in a moment."
+              );
+            } catch (innerErr) {
+              console.error('ColabBot: failed to save error fallback', innerErr);
+            }
+          }
+        }
+      }
     } catch (err) {
       console.error('send_message', err);
     }

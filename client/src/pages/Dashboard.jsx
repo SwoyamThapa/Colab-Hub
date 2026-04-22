@@ -273,15 +273,10 @@ export default function Dashboard() {
                             Collaborator:{' '}
                             <Link
                               to={`/profile/${r.helper?._id ?? r.helper}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
                               className="font-medium text-indigo-600 hover:text-indigo-500 hover:underline"
                             >
                               {r.helper?.name ?? 'View profile'}
                             </Link>
-                            <span className="ml-1 text-slate-500">
-                              (opens in a new tab)
-                            </span>
                           </>
                         ) : r.status === 'pending' ? (
                           <span className="text-slate-500">
@@ -308,8 +303,6 @@ export default function Dashboard() {
                                   >
                                     <Link
                                       to={`/profile/${aid}`}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
                                       className="min-w-0 flex-1 font-medium text-indigo-600 hover:text-indigo-500 hover:underline"
                                     >
                                       {name}

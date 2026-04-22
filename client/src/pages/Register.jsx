@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useContext, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { AuthContext } from '../context/AuthContext.jsx'
 
 export default function Register() {
   const [name, setName] = useState('')
@@ -8,6 +9,46 @@ export default function Register() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
+  const { login } = useContext(AuthContext)
+
+  const handleDemoLogin = async (e) => {
+    e.preventDefault()
+    setError('')
+    setLoading(true)
+
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: 'demouser@gmail.com', password: 'login123' }),
+      })
+
+      let data = null
+      try {
+        data = await res.json()
+      } catch {
+        // ignore non-json responses
+      }
+
+      if (!res.ok) {
+        setError(data?.message || 'Demo login failed')
+        return
+      }
+
+      const token = data?.token
+      if (!token) {
+        setError('No token received from server')
+        return
+      }
+
+      login(token)
+      navigate('/dashboard', { replace: true })
+    } catch (err) {
+      setError(err?.message || 'Something went wrong')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -35,8 +76,8 @@ export default function Register() {
 
       const token = data?.token
       if (token) {
-        localStorage.setItem('token', token)
-        navigate('/feed', { replace: true })
+        login(token)
+        navigate('/dashboard', { replace: true })
         return
       }
 
@@ -130,6 +171,15 @@ export default function Register() {
               className="w-full rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50"
             >
               {loading ? 'Processing...' : 'Create Account'}
+            </button>
+
+            <button
+              type="button"
+              disabled={loading}
+              onClick={handleDemoLogin}
+              className="w-full rounded-lg border-2 border-indigo-200 bg-white px-4 py-2.5 text-sm font-semibold text-indigo-700 shadow-sm hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50"
+            >
+              Log in as Demo User
             </button>
 
             <p className="pt-2 text-center text-sm text-slate-600">

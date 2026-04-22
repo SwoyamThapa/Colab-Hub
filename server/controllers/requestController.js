@@ -133,7 +133,7 @@ export const getChatHistory = async (req, res) => {
 
 export const addTask = async (req, res) => {
   const { id } = req.params;
-  const { title } = req.body;
+  const { title, dueDate } = req.body;
   const userId = req.user?.id;
 
   if (!userId) {
@@ -143,6 +143,20 @@ export const addTask = async (req, res) => {
   const trimmed = typeof title === 'string' ? title.trim() : '';
   if (!trimmed) {
     return res.status(400).json({ message: 'title is required' });
+  }
+
+  let parsedDueDate;
+  if (dueDate != null && String(dueDate).trim() !== '') {
+    const s = String(dueDate).trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+      const [y, m, d] = s.split('-').map(Number);
+      parsedDueDate = new Date(y, m - 1, d);
+    } else {
+      const candidate = new Date(s);
+      if (!Number.isNaN(candidate.getTime())) {
+        parsedDueDate = candidate;
+      }
+    }
   }
 
   try {
@@ -156,7 +170,11 @@ export const addTask = async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
 
-    request.tasks.push({ title: trimmed });
+    const newTask = { title: trimmed };
+    if (parsedDueDate) {
+      newTask.dueDate = parsedDueDate;
+    }
+    request.tasks.push(newTask);
     await request.save();
 
     const populated = await populateRequestForResponse(id);

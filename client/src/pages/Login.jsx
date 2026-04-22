@@ -41,7 +41,46 @@ export default function Login() {
       }
 
       login(token)
-      navigate('/feed', { replace: true })
+      navigate('/dashboard', { replace: true })
+    } catch (err) {
+      setError(err?.message || 'Something went wrong')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDemoLogin = async (e) => {
+    e.preventDefault()
+    setError('')
+    setLoading(true)
+
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: 'demouser@gmail.com', password: 'login123' }),
+      })
+
+      let data = null
+      try {
+        data = await res.json()
+      } catch {
+        // ignore non-json responses
+      }
+
+      if (!res.ok) {
+        setError(data?.message || 'Demo login failed')
+        return
+      }
+
+      const token = data?.token
+      if (!token) {
+        setError('No token received from server')
+        return
+      }
+
+      login(token)
+      navigate('/dashboard', { replace: true })
     } catch (err) {
       setError(err?.message || 'Something went wrong')
     } finally {
@@ -115,6 +154,15 @@ export default function Login() {
               className="w-full rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50"
             >
               {loading ? 'Processing...' : 'Sign In'}
+            </button>
+
+            <button
+              type="button"
+              disabled={loading}
+              onClick={handleDemoLogin}
+              className="w-full rounded-lg border-2 border-indigo-200 bg-white px-4 py-2.5 text-sm font-semibold text-indigo-700 shadow-sm hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50"
+            >
+              Log in as Demo User
             </button>
 
             <p className="pt-2 text-center text-sm text-slate-600">

@@ -34,6 +34,17 @@ function isAllowedInWorkspace(request, userId) {
   return false
 }
 
+function formatTaskDueDate(value) {
+  if (value == null) return null
+  const d = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(d.getTime())) return null
+  return d.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+}
+
 export default function Workspace() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -41,7 +52,9 @@ export default function Workspace() {
 
   const [request, setRequest] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState('overview')
   const [taskTitle, setTaskTitle] = useState('')
+  const [newTaskDate, setNewTaskDate] = useState('')
   const [addingTask, setAddingTask] = useState(false)
   const [togglingTaskId, setTogglingTaskId] = useState(null)
   const [assigningTaskId, setAssigningTaskId] = useState(null)
@@ -189,7 +202,10 @@ export default function Workspace() {
       const res = await fetch(`/api/requests/${id}/tasks`, {
         method: 'POST',
         headers: authHeadersJson(),
-        body: JSON.stringify({ title: trimmed }),
+        body: JSON.stringify({
+          title: trimmed,
+          dueDate: newTaskDate,
+        }),
       })
 
       if (res.status === 401) {
@@ -204,6 +220,7 @@ export default function Workspace() {
       const data = await res.json()
       setRequest(data)
       setTaskTitle('')
+      setNewTaskDate('')
     } finally {
       setAddingTask(false)
     }
@@ -457,6 +474,43 @@ export default function Workspace() {
           </button>
         </header>
 
+        {!loading && request && (
+          <div
+            className="mb-6 flex gap-1 border-b border-slate-200 p-0.5"
+            role="tablist"
+            aria-label="Workspace sections"
+          >
+            <button
+              type="button"
+              role="tab"
+              id="tab-overview"
+              aria-selected={activeTab === 'overview'}
+              onClick={() => setActiveTab('overview')}
+              className={`min-w-0 flex-1 rounded-t-lg px-4 py-2.5 text-sm font-semibold transition sm:flex-none sm:px-6 ${
+                activeTab === 'overview'
+                  ? 'border-b-2 border-indigo-600 bg-indigo-50 text-indigo-900'
+                  : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'
+              }`}
+            >
+              Overview
+            </button>
+            <button
+              type="button"
+              role="tab"
+              id="tab-chat"
+              aria-selected={activeTab === 'chat'}
+              onClick={() => setActiveTab('chat')}
+              className={`min-w-0 flex-1 rounded-t-lg px-4 py-2.5 text-sm font-semibold transition sm:flex-none sm:px-6 ${
+                activeTab === 'chat'
+                  ? 'border-b-2 border-indigo-600 bg-indigo-50 text-indigo-900'
+                  : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'
+              }`}
+            >
+              Chat
+            </button>
+          </div>
+        )}
+
         {loading && (
           <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-600 shadow-sm">
             Loading workspace…
@@ -464,6 +518,8 @@ export default function Workspace() {
         )}
 
         {!loading && request && (
+          <>
+            {activeTab === 'overview' && (
           <div className="grid gap-6 lg:grid-cols-2">
             <div className="flex flex-col gap-6">
               <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -681,73 +737,6 @@ export default function Workspace() {
                   )}
                 </ul>
               </section>
-
-              <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-                <h2 className="text-lg font-semibold text-slate-800">Team Chat</h2>
-                <p className="mt-1 text-sm text-slate-600">
-                  Messages sync in real time for everyone in this workspace.
-                </p>
-
-                <div className="mt-4 flex h-96 flex-col rounded-lg border border-slate-200 bg-slate-50/80">
-                  <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
-                    {messages.length === 0 ? (
-                      <p className="text-center text-sm text-slate-500">
-                        No messages yet. Say hello below.
-                      </p>
-                    ) : (
-                      messages.map((msg) => {
-                        const sid = msg.sender?._id ?? msg.sender
-                        const isOwn = idEquals(sid, user.id)
-                        return (
-                          <div
-                            key={msg._id}
-                            className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}
-                          >
-                            <div
-                              className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm shadow-sm ${
-                                isOwn
-                                  ? 'rounded-br-md bg-indigo-600 text-white'
-                                  : 'rounded-bl-md bg-white text-slate-800 ring-1 ring-slate-200'
-                              }`}
-                            >
-                              {!isOwn && (
-                                <p className="mb-1 text-xs font-semibold text-slate-500">
-                                  {msg.sender?.name ?? 'Teammate'}
-                                </p>
-                              )}
-                              <p className="whitespace-pre-wrap break-words">
-                                {msg.text}
-                              </p>
-                            </div>
-                          </div>
-                        )
-                      })
-                    )}
-                  </div>
-                  <div className="flex gap-2 border-t border-slate-200 bg-white p-3">
-                    <input
-                      type="text"
-                      value={currentMessage}
-                      onChange={(e) => setCurrentMessage(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault()
-                          sendMessage()
-                        }
-                      }}
-                      placeholder="Type a message…"
-                      className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                    />
-                    <button
-                      type="button"
-                      onClick={sendMessage}
-                      className="shrink-0 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                    >
-                      Send
-                    </button>
-                  </div>
-                </div>
-              </section>
             </div>
 
             <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -779,18 +768,27 @@ export default function Workspace() {
                 )
               })()}
 
-              <form onSubmit={handleAddTask} className="mt-6 flex flex-col gap-2 sm:flex-row sm:items-center">
+              <form
+                onSubmit={handleAddTask}
+                className="mt-6 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center"
+              >
                 <input
                   type="text"
                   value={taskTitle}
                   onChange={(e) => setTaskTitle(e.target.value)}
                   placeholder="New task title"
-                  className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 sm:min-w-[8rem]"
+                />
+                <input
+                  type="date"
+                  value={newTaskDate}
+                  onChange={(e) => setNewTaskDate(e.target.value)}
+                  className="shrink-0 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                 />
                 <button
                   type="submit"
                   disabled={addingTask || !taskTitle.trim()}
-                  className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50"
+                  className="shrink-0 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50"
                 >
                   {addingTask ? 'Adding…' : 'Add'}
                 </button>
@@ -808,6 +806,7 @@ export default function Workspace() {
                     const assigning = assigningTaskId === tid
                     const assigneeValue =
                       task?.assignee?._id || task?.assignee || ''
+                    const dueLabel = formatTaskDueDate(task.dueDate)
                     return (
                       <li
                         key={tid}
@@ -821,15 +820,22 @@ export default function Workspace() {
                           className="mt-0.5 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 disabled:opacity-50"
                         />
                         <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                          <span
-                            className={`text-sm ${
-                              task.isCompleted
-                                ? 'text-slate-500 line-through'
-                                : 'font-medium text-slate-900'
-                            }`}
-                          >
-                            {task.title}
-                          </span>
+                          <div className="flex min-w-0 flex-wrap items-center gap-2">
+                            <span
+                              className={`text-sm ${
+                                task.isCompleted
+                                  ? 'text-slate-500 line-through'
+                                  : 'font-medium text-slate-900'
+                              }`}
+                            >
+                              {task.title}
+                            </span>
+                            {dueLabel && (
+                              <span className="inline-flex shrink-0 items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800">
+                                Due: {dueLabel}
+                              </span>
+                            )}
+                          </div>
 
                           <select
                             value={String(assigneeValue)}
@@ -856,6 +862,87 @@ export default function Workspace() {
               </ul>
             </section>
           </div>
+            )}
+
+            {activeTab === 'chat' && (
+              <div className="w-full min-h-0">
+                <section
+                  className="flex min-h-0 flex-col rounded-xl border border-slate-200 bg-white p-6 shadow-sm"
+                  aria-labelledby="workspace-chat-heading"
+                >
+                  <h2
+                    id="workspace-chat-heading"
+                    className="text-lg font-semibold text-slate-800"
+                  >
+                    Team Chat
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-600">
+                    Messages sync in real time for everyone in this workspace.
+                  </p>
+
+                  <div className="mt-4 flex min-h-[min(28rem,75vh)] flex-1 flex-col rounded-lg border border-slate-200 bg-slate-50/80">
+                    <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
+                      {messages.length === 0 ? (
+                        <p className="text-center text-sm text-slate-500">
+                          No messages yet. Say hello below.
+                        </p>
+                      ) : (
+                        messages.map((msg) => {
+                          const sid = msg.sender?._id ?? msg.sender
+                          const isOwn = idEquals(sid, user.id)
+                          return (
+                            <div
+                              key={msg._id}
+                              className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}
+                            >
+                              <div
+                                className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm shadow-sm ${
+                                  isOwn
+                                    ? 'rounded-br-md bg-indigo-600 text-white'
+                                    : 'rounded-bl-md bg-white text-slate-800 ring-1 ring-slate-200'
+                                }`}
+                              >
+                                {!isOwn && (
+                                  <p className="mb-1 text-xs font-semibold text-slate-500">
+                                    {msg.sender?.name ?? 'Teammate'}
+                                  </p>
+                                )}
+                                <p className="whitespace-pre-wrap break-words">
+                                  {msg.text}
+                                </p>
+                              </div>
+                            </div>
+                          )
+                        })
+                      )}
+                    </div>
+                    <div className="flex gap-2 border-t border-slate-200 bg-white p-3">
+                      <input
+                        type="text"
+                        value={currentMessage}
+                        onChange={(e) => setCurrentMessage(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            sendMessage()
+                          }
+                        }}
+                        placeholder="Type a message…"
+                        className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={sendMessage}
+                        className="shrink-0 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                      >
+                        Send
+                      </button>
+                    </div>
+                  </div>
+                </section>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
