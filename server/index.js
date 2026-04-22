@@ -79,6 +79,10 @@ app.use(
 );
 app.use(express.json());
 
+app.get('/', (req, res) => {
+  res.type('text/plain').send('Server is up');
+});
+
 // Routes
 app.use('/api/projects', projectRoutes);
 app.use('/api/auth', authRoutes);
@@ -229,7 +233,7 @@ io.on('connection', (socket) => {
 
 const startServer = async () => {
   await connectDB();
-  server.listen(PORT, () => {
+  server.listen(PORT, '0.0.0.0', () => {
     const host = process.env.RAILWAY_PUBLIC_DOMAIN || 'localhost';
     const scheme = process.env.RAILWAY_PUBLIC_DOMAIN ? 'https' : 'http';
     const url = host === 'localhost' ? `http://localhost:${PORT}` : `${scheme}://${host}`;
