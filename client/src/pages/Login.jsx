@@ -61,7 +61,7 @@ export default function Login() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ email: 'demouser@gmail.com', password: 'login123' }),
+        body: JSON.stringify({ email: 'demo@gmail.com', password: 'login123' }),
       })
 
       let data = null
